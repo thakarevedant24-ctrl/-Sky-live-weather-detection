@@ -4,7 +4,6 @@
   // Respect the visitor's OS-level "reduce motion" setting.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-
   const LABELS = {
     0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
     45:'Fog',48:'Rime fog',
@@ -45,16 +44,15 @@
     const n = parseInt(h.slice(1),16);
     return [(n>>16)&255,(n>>8)&255,n&255];
   }
-  
+
   function lerp(a,b,t){ return a+(b-a)*t; }
- 
+  // Same, but for a whole [r,g,b] color at once.
   function lerpRgb(c1,c2,t){
     return [lerp(c1[0],c2[0],t),lerp(c1[1],c2[1],t),lerp(c1[2],c2[2],t)];
   }
   function rgbStr(c){ return `rgb(${c[0]|0},${c[1]|0},${c[2]|0})`; }
-  // Keep a number between a minimum and maximum.
+  
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-
 
   function iconSvg(cat,isDay){
     const stroke = 'stroke="currentColor" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
@@ -83,8 +81,6 @@
     }
   }
 
-
-
   const canvas = document.getElementById('sky');
   const ctx = canvas.getContext('2d');
   let W = 0, H = 0;
@@ -107,7 +103,6 @@
     particles:[],       // the current set of rain drops / snowflakes / etc.
     particleType:null,  // which kind of particle we're drawing this scene
   };
-
 
   function buildParticles(cat, isDay){
     const arr = [];
@@ -176,7 +171,6 @@
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
 
-  
     const sx = W*0.12 + scene.sunProgress*(W*0.76);
     const sy = H*0.62 - Math.sin(scene.sunProgress*Math.PI)*H*0.40;
     if(scene.isDay){
@@ -252,11 +246,10 @@
   }
   requestAnimationFrame(frame);
   if(reduceMotion){
-    // If the visitor prefers reduced motion we don't run a continuous
-    // animation loop, but we still redraw occasionally so the sky
-    // updates when new weather data comes in.
+  
     setInterval(frame, 4000);
   }
+
 
   const $ = id => document.getElementById(id);
   const placeName   = $('placeName'), statusDot = $('statusDot'), localTimeEl = $('localTime');
@@ -269,32 +262,32 @@
   let clockTimer = null, refreshTimer = null;
 
 
-  // Shows a short message near the bottom of the screen for a few seconds.
   function showToast(msg, ms){
     toast.textContent = msg;
     toast.hidden = false;
     clearTimeout(showToast._t);
     showToast._t = setTimeout(()=>{ toast.hidden=true; }, ms||4200);
   }
-
-  
   function localEpoch(isoNoOffset){ return Date.parse(isoNoOffset+'Z'); }
   function nowLocalEpoch(offsetSec){ return Date.now() + offsetSec*1000; }
+
 
   function startClock(offsetSec){
     if(clockTimer) clearInterval(clockTimer);
     function tick(){
       const t = new Date(nowLocalEpoch(offsetSec));
-      const hh = String(t.getUTCHours()).padStart(2,'0');
-      const mm = String(t.getUTCMinutes()).padStart(2,'0');
-      localTimeEl.textContent = `${hh}:${mm}`;
+     const hours = t.getUTCHours();
+      const minutes = String(t.getUTCMinutes()).padStart(2, '0');
+
+      const hour12 = hours % 12 || 12;
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+
+      localTimeEl.textContent = `${hour12}:${minutes} ${ampm}`;
     }
     tick();
     clockTimer = setInterval(tick,1000);
   }
 
-
-  
   async function reverseGeocode(lat,lon){
     try{
       const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
@@ -311,8 +304,7 @@
     statusDot.classList.add('loading');
     placeName.textContent = knownName || 'Locating…';
     try{
-      // Look up the place name and fetch the weather at the same time,
-      // instead of waiting for one before starting the other.
+   
       const [namePromise, weatherRes] = await Promise.all([
         knownName ? Promise.resolve(knownName) : reverseGeocode(lat,lon),
         fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=relativehumidity_2m,apparent_temperature,surface_pressure&daily=sunrise,sunset&timezone=auto&forecast_days=2`)
@@ -326,7 +318,6 @@
       const cat = category(cw.weathercode);
       const isDay = !!cw.is_day;
 
-      
       const hourly = data.hourly;
       const targetHour = cw.time.slice(0,13); // "YYYY-MM-DDTHH"
       let idx = hourly.time.findIndex(t=>t.slice(0,13)===targetHour);
@@ -336,7 +327,6 @@
       const hum = Math.round(hourly.relativehumidity_2m[idx]);
       const pres = Math.round(hourly.surface_pressure[idx]);
 
-   
       const sunrise0 = localEpoch(data.daily.sunrise[0]);
       const sunset0  = localEpoch(data.daily.sunset[0]);
       const sunrise1 = data.daily.sunrise[1] ? localEpoch(data.daily.sunrise[1]) : sunrise0 + 86400000;
@@ -347,8 +337,7 @@
         // Daytime: 0 at sunrise, 1 at sunset
         progress = clamp((now-sunrise0)/(sunset0-sunrise0),0,1);
       } else if(now < sunrise0){
-        // It's the early hours, before today's sunrise —
-        // approximate "night start" as 24h before today's sunrise
+       
         const pseudoStart = sunset0 - 86400000;
         progress = clamp((now-pseudoStart)/(sunrise0-pseudoStart),0,1);
       } else {
@@ -380,7 +369,7 @@
 
       state.lat=lat; state.lon=lon; state.name=name;
 
-      // Automatically refresh every 10 minutes so it stays "live"
+      
       if(refreshTimer) clearInterval(refreshTimer);
       refreshTimer = setInterval(()=>loadWeatherFor(lat,lon,name), 10*60*1000);
 
@@ -394,8 +383,6 @@
   // Remembers whichever location is currently showing.
   const state = {lat:null,lon:null,name:null};
 
-
- 
   function detectLocation(){
     statusDot.classList.add('loading');
     placeName.textContent = 'Locating…';
@@ -433,7 +420,6 @@
     const q = citySearch.value.trim();
     if(q.length<2){ suggestions.hidden=true; suggestions.innerHTML=''; return; }
 
-   
     searchDebounce = setTimeout(async ()=>{
       try{
         if(searchAbort) searchAbort.abort(); // cancel any lookup still in flight
@@ -468,7 +454,6 @@
     }
   });
 
-  // Pressing Enter picks the first suggestion
   searchForm.addEventListener('submit', (e)=>{
     e.preventDefault();
     const first = suggestions.querySelector('button');
