@@ -22,7 +22,7 @@ body{
   color:var(--ink);
   overflow-x:hidden;
   min-height:100vh;
-  background:#0b0f18; /* shows briefly before the canvas paints */
+  background:#0b0f18; 
 }
 
 #sky{
@@ -37,7 +37,7 @@ body{
   position:fixed;
   inset:0;
   z-index:1;
-  pointer-events:none; /* clicks pass through to whatever is underneath */
+  pointer-events:none; 
   background:linear-gradient(180deg,
     rgba(0,0,0,.04) 0%,
     rgba(0,0,0,.30) 32%,
@@ -79,7 +79,6 @@ body{
   flex:none;
   box-shadow:0 0 0 3px var(--brass-soft);
 }
-/* Pulses gently while we're still fetching data */
 .dot.loading{animation:pulse 1.1s ease-in-out infinite;}
 @keyframes pulse{0%,100%{opacity:.4;}50%{opacity:1;}}
 .localtime{font-variant-numeric:tabular-nums;letter-spacing:.08em;}
@@ -101,7 +100,7 @@ body{
   font-family:'Fraunces',serif;
   font-optical-sizing:auto;
   font-weight:500;
-  font-size:clamp(64px,20vw,124px); /* scales with screen width */
+  font-size:clamp(64px,20vw,124px); 
   line-height:.95;
   letter-spacing:-.02em;
   text-shadow:0 6px 26px rgba(0,0,0,.42);
@@ -216,7 +215,6 @@ button:focus-visible{
 }
 #locateBtn svg{width:18px;height:18px;}
 #locateBtn:hover{background:var(--glass-hi);}
-/* Spins while a location lookup is in progress */
 #locateBtn.spinning svg{animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
@@ -245,7 +243,7 @@ button:focus-visible{
 }
 
 @media (max-width:420px){
-  .readouts{grid-template-columns:repeat(2,1fr);} /* 2x2 on small phones */
+  .readouts{grid-template-columns:repeat(2,1fr);}
 }
 @media (prefers-reduced-motion:reduce){
   .dot.loading{animation:none;}

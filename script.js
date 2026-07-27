@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  // Respect the visitor's OS-level "reduce motion" setting.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const LABELS = {
@@ -27,9 +26,32 @@
     return 'cloudy';
   }
 
+  function cloudCategory(coverPct){
+    if(coverPct<=20) return 'clear';
+    if(coverPct<=60) return 'partly';
+    return 'cloudy';
+  }
+  const CLOUD_LABELS = { clear:'Clear sky', partly:'Partly cloudy', cloudy:'Overcast' };
+
+  function refineCategory(weatherCode, rainMm, showersMm, snowfallMm, cloudCoverPct){
+    let cat = category(weatherCode);
+    let label = LABELS[weatherCode] || 'Unsettled';
+    const rainingNow = (rainMm + showersMm) > 0.05; 
+    const snowingNow = snowfallMm > 0.02;         
+
+    if((cat==='drizzle' || cat==='rain' || cat==='storm') && !rainingNow){
+      cat = cloudCategory(cloudCoverPct);
+      label = CLOUD_LABELS[cat];
+    } else if(cat==='snow' && !snowingNow){
+      cat = cloudCategory(cloudCoverPct);
+      label = CLOUD_LABELS[cat];
+    }
+    return { cat, label };
+  }
+
   const PALETTES = {
     clear:  { day:['#3E8EDE','#BFE4F5'], night:['#050A18','#131C33'] },
-    partly: { day:['#3198f3','#CBDCE8'], night:['#0A1024','#1A2540'] },
+    partly: { day:['#4C8FCB','#CBDCE8'], night:['#0A1024','#1A2540'] },
     cloudy: { day:['#6B7686','#B9C0C9'], night:['#12151F','#252B37'] },
     fog:    { day:['#8B95A0','#D3D8DC'], night:['#161A20','#2A2F36'] },
     drizzle:{ day:['#5A6B7A','#96A4B0'], night:['#0D131C','#1E2530'] },
@@ -37,9 +59,8 @@
     snow:   { day:['#8FA3B8','#E7EEF3'], night:['#0F1626','#232E42'] },
     storm:  { day:['#282E38','#4A5260'], night:['#05070C','#12151C'] },
   };
-  const GLOW = [255,150,90]; // warm dawn/dusk horizon color, as [r,g,b]
+  const GLOW = [255,150,90]; 
 
-  // "#3E8EDE" -> [62,142,222]
   function hexToRgb(h){
     const n = parseInt(h.slice(1),16);
     return [(n>>16)&255,(n>>8)&255,n&255];
@@ -51,7 +72,7 @@
     return [lerp(c1[0],c2[0],t),lerp(c1[1],c2[1],t),lerp(c1[2],c2[2],t)];
   }
   function rgbStr(c){ return `rgb(${c[0]|0},${c[1]|0},${c[2]|0})`; }
-  
+  // Keep a number between a minimum and maximum.
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 
   function iconSvg(cat,isDay){
@@ -96,12 +117,12 @@
   resize();
 
   const scene = {
-    cat:'clear',        // current weather category
-    isDay:true,         // is it daytime right now at that location?
-    sunProgress:0.5,    // 0 = sunrise/sunset just happened, 1 = the other end
-    glow:0,             // 0-1 strength of the dawn/dusk warm-color effect
-    particles:[],       // the current set of rain drops / snowflakes / etc.
-    particleType:null,  // which kind of particle we're drawing this scene
+    cat:'clear',       
+    isDay:true,         
+    sunProgress:0.5,   
+    glow:0,             
+    particles:[],      
+    particleType:null,  
   };
 
   function buildParticles(cat, isDay){
@@ -155,13 +176,13 @@
   function frame(){
     ctx.clearRect(0,0,W,H);
 
-    // --- sky gradient ---
+  
     const pal = PALETTES[scene.cat] || PALETTES.cloudy;
     const stops = scene.isDay ? pal.day : pal.night;
     let top = hexToRgb(stops[0]);
     let bottom = hexToRgb(stops[1]);
     if(scene.glow>0){
-      // Near sunrise/sunset, blend in some warm glow color
+
       top = lerpRgb(top, GLOW, scene.glow*0.28);
       bottom = lerpRgb(bottom, GLOW, scene.glow*0.55);
     }
@@ -170,7 +191,6 @@
     g.addColorStop(1, rgbStr(bottom));
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
-
     const sx = W*0.12 + scene.sunProgress*(W*0.76);
     const sy = H*0.62 - Math.sin(scene.sunProgress*Math.PI)*H*0.40;
     if(scene.isDay){
@@ -192,6 +212,7 @@
       ctx.beginPath(); ctx.arc(sx,sy,13,0,Math.PI*2); ctx.fill();
     }
 
+    // --- particles (rain / snow / clouds / fog / stars) ---
     ctx.lineCap='round';
     if(scene.particleType==='stars'){
       ctx.fillStyle='#fff';
@@ -227,8 +248,8 @@
         ctx.lineTo(p.x-2,p.y+p.len);
         ctx.stroke();
         if(!reduceMotion){
-          p.y += p.spd; p.x -= 0.6; // fall down and slightly sideways
-          if(p.y>H){ p.y=-20; p.x=Math.random()*W; } // recycle back to the top
+          p.y += p.spd; p.x -= 0.6; 
+          if(p.y>H){ p.y=-20; p.x=Math.random()*W; } 
         }
       });
     } else if(scene.particleType==='snow'){
@@ -246,10 +267,8 @@
   }
   requestAnimationFrame(frame);
   if(reduceMotion){
-  
     setInterval(frame, 4000);
   }
-
 
   const $ = id => document.getElementById(id);
   const placeName   = $('placeName'), statusDot = $('statusDot'), localTimeEl = $('localTime');
@@ -261,28 +280,22 @@
 
   let clockTimer = null, refreshTimer = null;
 
-
   function showToast(msg, ms){
     toast.textContent = msg;
     toast.hidden = false;
     clearTimeout(showToast._t);
     showToast._t = setTimeout(()=>{ toast.hidden=true; }, ms||4200);
   }
+
   function localEpoch(isoNoOffset){ return Date.parse(isoNoOffset+'Z'); }
   function nowLocalEpoch(offsetSec){ return Date.now() + offsetSec*1000; }
-
-
   function startClock(offsetSec){
     if(clockTimer) clearInterval(clockTimer);
     function tick(){
       const t = new Date(nowLocalEpoch(offsetSec));
-     const hours = t.getUTCHours();
-      const minutes = String(t.getUTCMinutes()).padStart(2, '0');
-
-      const hour12 = hours % 12 || 12;
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-
-      localTimeEl.textContent = `${hour12}:${minutes} ${ampm}`;
+      const hh = String(t.getUTCHours()).padStart(2,'0');
+      const mm = String(t.getUTCMinutes()).padStart(2,'0');
+      localTimeEl.textContent = `${hh}:${mm}`;
     }
     tick();
     clockTimer = setInterval(tick,1000);
@@ -304,28 +317,22 @@
     statusDot.classList.add('loading');
     placeName.textContent = knownName || 'Locating…';
     try{
-   
       const [namePromise, weatherRes] = await Promise.all([
         knownName ? Promise.resolve(knownName) : reverseGeocode(lat,lon),
-        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=relativehumidity_2m,apparent_temperature,surface_pressure&daily=sunrise,sunset&timezone=auto&forecast_days=2`)
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,surface_pressure,wind_speed_10m&daily=sunrise,sunset&timezone=auto&forecast_days=2`)
       ]);
       if(!weatherRes.ok) throw new Error('weather fetch failed');
       const data = await weatherRes.json();
       const name = namePromise;
 
-      const cw = data.current_weather;
+      const cw = data.current;
       const offset = data.utc_offset_seconds || 0;
-      const cat = category(cw.weathercode);
       const isDay = !!cw.is_day;
+      const { cat, label } = refineCategory(cw.weather_code, cw.rain, cw.showers, cw.snowfall, cw.cloud_cover);
 
-      const hourly = data.hourly;
-      const targetHour = cw.time.slice(0,13); // "YYYY-MM-DDTHH"
-      let idx = hourly.time.findIndex(t=>t.slice(0,13)===targetHour);
-      if(idx<0) idx = 0;
-
-      const feels = Math.round(hourly.apparent_temperature[idx]);
-      const hum = Math.round(hourly.relativehumidity_2m[idx]);
-      const pres = Math.round(hourly.surface_pressure[idx]);
+      const feels = Math.round(cw.apparent_temperature);
+      const hum = Math.round(cw.relative_humidity_2m);
+      const pres = Math.round(cw.surface_pressure);
 
       const sunrise0 = localEpoch(data.daily.sunrise[0]);
       const sunset0  = localEpoch(data.daily.sunset[0]);
@@ -334,14 +341,14 @@
 
       let progress;
       if(isDay){
-        // Daytime: 0 at sunrise, 1 at sunset
+
         progress = clamp((now-sunrise0)/(sunset0-sunrise0),0,1);
       } else if(now < sunrise0){
-       
+        // It's the early hours, before today's sunrise —
+        // approximate "night start" as 24h before today's sunrise
         const pseudoStart = sunset0 - 86400000;
         progress = clamp((now-pseudoStart)/(sunrise0-pseudoStart),0,1);
       } else {
-        // Evening: 0 at sunset, 1 at tomorrow's sunrise
         progress = clamp((now-sunset0)/(sunrise1-sunset0),0,1);
       }
       const minsToSunrise = Math.abs(now-sunrise0)/60000;
@@ -349,27 +356,25 @@
       const glow = clamp(1 - Math.min(minsToSunrise,minsToSunset)/90, 0, 1); // strongest within 90 min of either
 
       if(scene.cat!==cat || scene.isDay!==isDay){
-        buildParticles(cat, isDay); 
+        buildParticles(cat, isDay); // only rebuild particles if the category actually changed
       }
       scene.cat = cat; scene.isDay = isDay; scene.sunProgress = progress; scene.glow = glow;
-      if(reduceMotion) frame(); 
+      if(reduceMotion) frame();
 
       // --- update all the on-screen text ---
       placeName.textContent = name;
       statusDot.classList.remove('loading');
-      tempEl.textContent = `${Math.round(cw.temperature)}°`;
-      condLabel.textContent = LABELS[cw.weathercode] || 'Unsettled';
+      tempEl.textContent = `${Math.round(cw.temperature_2m)}°`;
+      condLabel.textContent = label;
       condIcon.innerHTML = iconSvg(cat, isDay);
       feelsLike.textContent = `${feels}°`;
-      windEl.textContent = `${Math.round(cw.windspeed)} km/h`;
+      windEl.textContent = `${Math.round(cw.wind_speed_10m)} km/h`;
       humidityEl.textContent = `${hum}%`;
       pressureEl.textContent = `${pres} hPa`;
       startClock(offset);
       updatedEl.textContent = 'Live · updates every 10 min · via Open‑Meteo';
 
       state.lat=lat; state.lon=lon; state.name=name;
-
-      
       if(refreshTimer) clearInterval(refreshTimer);
       refreshTimer = setInterval(()=>loadWeatherFor(lat,lon,name), 10*60*1000);
 
